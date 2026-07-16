@@ -1,0 +1,91 @@
+plugins {
+    id 'java'
+}
+
+group = providers.gradleProperty("artifactGroup").get()
+version = providers.gradleProperty("artifactVersion").get()
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+def artifactNameValue =
+        providers.gradleProperty("artifactName").get()
+
+def sourceJarNameValue =
+        providers.gradleProperty("sourceJarName").get()
+
+def sourceJar =
+        layout.projectDirectory.file("libs/${sourceJarNameValue}")
+
+tasks.register("validateThirdPartyJar") {
+    group = "verification"
+    description = "Validates that the approved third-party JAR exists."
+
+    doLast {
+        File jarFile = sourceJar.asFile
+
+        if (!jarFile.exists()) {
+            throw new GradleException(
+                    "Third-party JAR not found: ${jarFile}. " +
+                    "Copy the approved JAR into libs/ and ensure " +
+                    "sourceJarName in gradle.properties matches the filename."
+            )
+        }
+
+        if (jarFile.length() == 0) {
+            throw new GradleException(
+                    "Third-party JAR is empty: ${jarFile}"
+            )
+        }
+
+        println "Validated vendor JAR: ${jarFile.name}"
+        println "Vendor JAR size: ${jarFile.length()} bytes"
+    }
+}
+
+tasks.register("packageThirdPartyJar", Copy) {
+    group = "build"
+    description = "Copies and renames the vendor JAR into build/libs."
+
+    dependsOn tasks.named("classes")
+    dependsOn tasks.named("validateThirdPartyJar")
+
+    from(sourceJar)
+
+    into(layout.buildDirectory.dir("libs"))
+
+    rename {
+        "${artifactNameValue}-${project.version}.jar"
+    }
+
+    doLast {
+        println "Generated artifact:"
+        println layout.buildDirectory
+                .file("libs/${artifactNameValue}-${project.version}.jar")
+                .get()
+                .asFile
+    }
+}
+
+/*
+ * Disable the normal project JAR so it does not overwrite or conflict
+ * with the vendor JAR copied into build/libs.
+ */
+tasks.named("jar") {
+    enabled = false
+}
+
+tasks.named("assemble") {
+    dependsOn tasks.named("packageThirdPartyJar")
+}
+
+tasks.named("build") {
+    dependsOn tasks.named("packageThirdPartyJar")
+}

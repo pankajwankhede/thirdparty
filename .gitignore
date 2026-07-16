@@ -1,0 +1,11 @@
+.gradle/
+build/
+.idea/
+*.iml
+out/
+*.log
+*.tmp
+
+# Keep the approved vendor JAR in source control when permitted.
+!libs/
+!libs/*.jar
